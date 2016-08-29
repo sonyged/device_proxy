@@ -1,0 +1,21 @@
+{
+  "name": "device_proxy",
+  "version": "1.0.1",
+  "description": "device module proxy between renderer and browser processes",
+  "main": "device_proxy.js",
+  "scripts": {
+    "test": "./node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha -- --recursive -R spec -r should",
+    "posttest": "./node_modules/.bin/istanbul check-coverage && rm -rf coverage"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "debug": "latest"
+  },
+  "devDependencies": {
+    "nodeunit": "latest",
+    "mocha": "latest",
+    "istanbul": "latest",
+    "should": "latest"
+  }
+}
