@@ -63,8 +63,8 @@ function Server(opts)
       device.find_device(arg.arg.device, err => { reply(null, err); });
     },
     serial_open: (reply, arg) => {
-      debug(`device-request: ${arg.request}`, arg.arg.device);
-      device.serial_open(arg.arg.device, err => { reply(null, err); });
+      debug(`device-request: ${arg.request}`, arg);
+      device.serial_open(err => { reply(null, err); });
     },
     serial_write: (reply, arg) => {
       debug(`device-request: ${arg.request}`, arg.arg.data);
@@ -81,10 +81,6 @@ function Server(opts)
         });
       });
     },
-    serial_close: (reply, arg) => {
-      debug(`device-request: ${arg.request}`);
-      device.serial_close(err => { reply(null, err); });
-    },
     /*
      * req.device: name of device file (if usb).
      * req.sketch: sketch binary in intel-hex format string.
@@ -99,7 +95,7 @@ function Server(opts)
   listener('device-request', (sender, arg) => {
     debug('device-request', arg);
     const reply = (response, error) => {
-      //debug('device-reply', arg, response);
+      debug('device-request: reply', arg, response);
       sender('device-reply', {
         request: arg.request, arg: response, error: error, id: arg.id
       });
@@ -111,6 +107,7 @@ function Server(opts)
       });
     };
     let handler = this.handler[arg.request];
+    debug('device-request: handler', handler);
     if (handler)
       handler(reply, arg, notify);
     else
@@ -126,51 +123,44 @@ function Client(opts)
     debug = opts.debug;
 
   this.cmdid = 0;
+  this.current_cmd = null;
   this.cmdq = [];
   this.cmdq_pending = [];
   this.notifier = {};
   this.serial_events = {};
-  this.send_cmd = (cmd) => {
-    this.cmdq.push(cmd);
-    sender('device-request', {
+
+  const send_cmd = () => {
+    if (this.current_cmd !== null ||
+        this.cmdq.length === 0)
+      return;
+
+    debug('send_cmd:', this.cmdq);
+    const cmd = this.cmdq[0];
+    this.current_cmd = cmd;
+    return sender('device-request', {
       request: cmd.request, arg: cmd.arg, id: cmd.id
     });
   };
-  this.send_pending = (type) => {
-    let cmd = null;
-    this.cmdq_pending = this.cmdq_pending.reduce((acc, x) => {
-      if (!cmd && x.request === type)
-        cmd = x;
-      else
-        acc.push(x);
-      return acc;
-    }, []);
-    if (cmd) {
-      debug('device_proxy: send_pending', type, cmd);
-      this.send_cmd(cmd);
-    } else {
-      debug('device_proxy: send_pending: no cmd', type);
-    }
+  this.send_cmd = (cmd) => {
+    this.cmdq.push(cmd);
+    send_cmd();
   };
   this.request = (type, arg, cb) => {
     const id = this.cmdid++;
     const cmd = { request: type, arg: arg, callback: cb, id: id };
-    if (this.cmdq.find(x => { return x.request === type; })) {
-      //debug('device_proxy: defer', cmd);
-      this.cmdq_pending.push(cmd);
-    } else {
-      this.send_cmd(cmd);
-    }
+    debug('device_proxy: request', cmd);
+    this.send_cmd(cmd);
   };
   listener('device-reply', (arg) => {
+    debug('device_proxy: reply', arg);
     let cmd = this.cmdq.find(x => { return x.id === arg.id; });
     if (cmd) {
-      //debug('device_proxy: reply', cmd, arg);
       this.cmdq = this.cmdq.filter(x => { return x.id !== arg.id; });
-      this.send_pending(cmd.request);
-      cmd.callback(arg.error || arg.arg);
+      this.current_cmd = null;
+      setTimeout(send_cmd, 0);
+      return cmd.callback(arg.error || arg.arg);
     } else {
-      //debug('device_proxy: reply: no cmd found', arg);
+      debug('device_proxy: reply: no cmd found', arg);
     }
   });
   listener('device-notify', (arg) => {
@@ -199,27 +189,64 @@ function Client(opts)
   this.close = (cb) => {
     this.request('close', {}, cb);
   };
+  this.reset_koov = (cb) => {
+    this.request('reset_koov', {}, cb);
+  };
   this.find_device = (device, cb) => {
     this.request('find_device', { device: device }, cb);
   };
-  this.serial_open = (device, cb) => {
-    this.request('serial_open', { device: device }, cb);
+  this.serial_open = (cb) => {
+    this.request('serial_open', {}, cb);
   };
   this.serial_write = (data, cb) => {
     this.request('serial_write', { data: data }, cb);
   };
-  this.notifier['serial_event'] = (data) => {
-    const notify = this.serial_events[event_name];
-    if (notify)
-      notify(data);
+  this.notifier['serial_event'] = (arg) => {
+    debug('notifier: serial_event', arg);
+    const notify = this.serial_events[arg.what];
+    if (notify) {
+      debug('notifer: do notify', notify);
+      notify(arg.data);
+    } else
+      debug('notifer: not found');
   };
   this.serial_event = (what, cb, notify) => {
     const event_name = `serial-event:${what}`;
     this.serial_events[event_name] = notify;
     this.request('serial_event', { what: event_name }, cb);
   };
-  this.serial_close = (cb) => {
-    this.request('serial_close', {}, cb);
+  this.program_serial = () => {
+    /*
+     * Write with dividing into 20 byte chunks.
+     */
+    const ble_write = (data, callback) => {
+      let length = data.length;
+      if (length > 20)
+        length = 20;
+      debug('write!', data);
+      this.serial_write(data.slice(0, length), err => {
+        data = data.slice(length);
+        debug('write! complete', data);
+        if (data.length > 0)
+          return ble_write(data, callback);
+        else {
+          debug('write done!');
+          callback();
+        }
+      });
+    };
+    /*
+     * ble serial wrapper for stk500v2 module.
+     */
+    const serial = {
+      path: 'dummy',        // this is necessary.
+      open: (callback) => { return callback(null); },
+      on: (what, callback) => { this.serial_event(what, () => {}, callback); },
+      close: (callback) => { this.close(callback); },
+      write: ble_write,
+      drain: (callback) => { debug('drain called'); callback(null); },
+    };
+    return serial;
   };
   this.program_sketch = (device, sketch, cb, progress) => {
     this.notifier['program-sketch'] = progress;
