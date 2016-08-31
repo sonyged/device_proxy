@@ -80,16 +80,6 @@ function Server(opts)
           data: notification
         });
       });
-    },
-    /*
-     * req.device: name of device file (if usb).
-     * req.sketch: sketch binary in intel-hex format string.
-     */
-    'program-sketch': (reply, arg, notify) => {
-      const req = arg.arg;
-      device.program_sketch(req.device, req.sketch, (err) => {
-        reply(null, err);
-      }, (notification) => { notify(notification); });
     }
   };
   listener('device-request', (sender, arg) => {
@@ -291,13 +281,6 @@ function Client(opts)
       },
     };
     return serial;
-  };
-  this.program_sketch = (device, sketch, cb, progress) => {
-    this.notifier['program-sketch'] = progress;
-    this.request('program-sketch', { device: device, sketch: sketch }, (err) => {
-      this.notifier['program-sketch'] = null;
-      cb(err);
-    });
   };
 }
 
