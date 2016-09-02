@@ -19,11 +19,17 @@ function Server(opts)
     debug('device.start_scan ok');
   });
   this.handler = {
+    /*
+     * Return list of found devices by scan.  No argument.
+     */
     list: (reply, arg) => {
       let list = device.list();
       debug(`device-request: ${arg.request}`, list);
       reply(list, null);
     },
+    /*
+     * Start device scan.  No argument.
+     */
     device_scan: (reply, arg) => {
       device.start_scan(err => {
         device.stop_scan();
@@ -34,42 +40,57 @@ function Server(opts)
         return reply(null, err);
       });
     },
+    /*
+     * Open specified device.  The argument is one of elements
+     * returned by `list' command above.
+     */
     open: (reply, arg) => {
       //debug(`device-request: ${arg.request}`, arg.arg.device);
       device.open(arg.arg.device, err => { reply(null, err); });
     },
-    action: (reply, arg) => {
-      let action = device.action();
-      if (action) {
-        action.action(arg.arg.block, arg.arg.arg, err => {
-          //debug(`device-request: reply err = ${err}`, arg);
-          reply(err, err);
-        });
-      } else {
-        debug(`action: null`, arg);
-        reply(null, null);
-      }
-    },
+    /*
+     * Close currently opened device.  Nop if nothing is opened.  No
+     * argument.
+     */
     close: (reply, arg) => {
       debug(`device-request: ${arg.request}`);
       device.close(err => { reply(null, err); });
     },
+    /*
+     * Reset currently selected device and put it into bootloader
+     * mode.  No argument.
+     */
     reset_koov: (reply, arg) => {
       debug(`device-request: ${arg.request}`);
       device.reset_koov(err => { reply(null, err); });
     },
+    /*
+     * Set specified device.  The argument is one of element returned
+     * by `list' command above.
+     */
     find_device: (reply, arg) => {
       debug(`device-request: ${arg.request}`, arg.arg.device);
       device.find_device(arg.arg.device, err => { reply(null, err); });
     },
+    /*
+     * Open selected device by `find_device' command above.
+     */
     serial_open: (reply, arg) => {
       debug(`device-request: ${arg.request}`, arg);
       device.serial_open(err => { reply(null, err); });
     },
+    /*
+     * Write data to currently opened device.  The argument is data to
+     * be writtend.
+     */
     serial_write: (reply, arg) => {
       //debug(`device-request: ${arg.request}`, arg.arg.data);
       device.serial_write(arg.arg.data, err => { reply(null, err); });
     },
+    /*
+     * Set up listener for given event.  The argument is type of event
+     * and callback to notify the event.
+     */
     serial_event: (reply, arg, notify) => {
       debug(`device-request: ${arg.request}`, arg.arg.what);
       device.serial_event(arg.arg.what, err => {
@@ -219,14 +240,6 @@ function Client(opts)
     this.notifier = {};
     this.serial_events = {};
     return cb(null);
-  };
-  this.action = () => {
-    return {
-      action: (block, arg, cb) => {
-        //debug('device_proxy: action', block);
-        this.request('action', { block: block, arg: arg }, cb);
-      }
-    };
   };
   this.list = (cb) => {
     this.request('list', {}, cb);
