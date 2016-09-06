@@ -170,7 +170,7 @@ function Client(opts)
     this.current_cmd = null;
     drop_cmd(cmd.id);
     debug('drop_expired: drop command', cmd.id);
-    setTimeout(send_cmd, 0);
+    setImmediate(send_cmd);
     return cmd.callback({ msg: 'command timeout' });
   };
 
@@ -185,11 +185,13 @@ function Client(opts)
     if (now > cmd.timestamp + command_timeout) {
       debug('send_cmd: drop due to out of date', cmd);
       this.cmdq.pop();
-      setTimeout(send_cmd, 0);
+      setImmediate(send_cmd);
       return cmd.callback({ msg: 'command timeout' });
     }
     this.current_cmd = cmd;
-    this.timeout_id = setTimeout(() => { drop_expired(cmd); }, command_timeout);
+    this.timeout_id = setTimeout(() => {
+      drop_expired(cmd);
+    }, command_timeout);
     //debug('send_cmd: dequeue', cmd);
     return sender('device-request', {
       request: cmd.request, arg: cmd.arg, id: cmd.id
@@ -221,7 +223,7 @@ function Client(opts)
         clearTimeout(this.timeout_id);
         this.timeout_id = null;
       }
-      setTimeout(send_cmd, 0);
+      setImmediate(send_cmd);
       return cmd.callback(arg.error || arg.arg);
     } else {
       debug('device_proxy: reply: no cmd found', arg, this.cmdq);
