@@ -85,7 +85,10 @@ function Server(opts)
      */
     serial_write: (reply, arg) => {
       //debug(`device-request: ${arg.request}`, arg.arg.data);
-      device.serial_write(arg.arg.data, err => { reply(null, err); });
+      device.serial_write(arg.arg.data, err => {
+        //debug(`device-request: ${arg.request} =>`, err);
+        reply(null, err);
+      });
     },
     /*
      * Set up listener for given event.  The argument is type of event
@@ -130,12 +133,13 @@ function Client(opts)
 {
   let sender = opts.sender;
   let listener = opts.listener;
-  let command_timeout = 60000;
+  let command_timeout = 20000;
   if (opts.debug)
     debug = opts.debug;
   if (opts.command_timeout)
     command_timeout = opts.command_timeout;
 
+  this.terminated = false;
   this.cmdid = 0;
   this.current_cmd = null;
   this.timeout_id = null;
@@ -148,30 +152,35 @@ function Client(opts)
       const cmd = this.cmdq.pop();
       if (!cmd)
         return;
-      debug('flusing cmd:', cmd.id);
-      cmd.cb();
+      //debug('flusing cmd:', cmd);
+      cmd.callback({msg: 'command terminated'});
     }
   };
 
-  const drop_cmd = (id) => {
+  const dequeue_cmd = (id) => {
     this.cmdq = this.cmdq.filter(x => { return x.id !== id; });
   };
 
-  const drop_expired = (cmd) => {
+  const drop_cmd = (cmd, send_next, reason) => {
     this.timeout_id = null;
     if (!this.current_cmd) {
-      debug('drop_expired: no current command');
+      debug('drop_cmd: no current command');
       return;
     }
     if (cmd.id !== this.current_cmd.id) {
-      debug('drop_expired: id mismatch', cmd.id, this.current_cmd.id);
+      debug('drop_cmd: id mismatch', cmd.id, this.current_cmd.id);
       return;
     }
     this.current_cmd = null;
-    drop_cmd(cmd.id);
-    debug('drop_expired: drop command', cmd.id);
-    setImmediate(send_cmd);
-    return cmd.callback({ msg: 'command timeout' });
+    dequeue_cmd(cmd.id);
+    //debug('drop_cmd: drop command', cmd);
+    if (send_next)
+      setImmediate(send_cmd);
+    return cmd.callback({ msg: reason });
+  };
+
+  const drop_expired = (cmd) => {
+    return drop_cmd(cmd, true, 'command timeout');
   };
 
   const send_cmd = () => {
@@ -217,7 +226,7 @@ function Client(opts)
     //debug('device_proxy: reply', arg);
     let cmd = this.cmdq.find(x => { return x.id === arg.id; });
     if (cmd) {
-      drop_cmd(arg.id);
+      dequeue_cmd(arg.id);
       this.current_cmd = null;
       if (this.timeout_id) {
         clearTimeout(this.timeout_id);
@@ -241,6 +250,7 @@ function Client(opts)
     this.current_cmd = null;
     this.notifier = {};
     this.serial_events = {};
+    this.terminated = false;
     return cb(null);
   };
   this.list = (cb) => {
@@ -254,6 +264,13 @@ function Client(opts)
   };
   this.close = (cb) => {
     this.request('close', {}, cb);
+  };
+  this.terminate = (cb) => {
+    debug('device_proxy: terminate', this.current_cmd);
+    if (this.current_cmd)
+      drop_cmd(this.current_cmd, false, 'command terminated');
+    flush_cmdq();
+    cb(null);
   };
   this.reset_koov = (cb) => {
     this.request('reset_koov', {}, cb);
