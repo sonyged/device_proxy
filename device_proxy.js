@@ -4,6 +4,39 @@
 'use strict';
 let debug = require('debug')('device_proxy');
 
+const DEVICE_PROXY_ERROR = 0xfd;
+
+const PROXY_NO_ERROR = 0x00;
+const PROXY_UNKNOWN_REQUEST = 0x01;  // no matching request found.
+const PROXY_CMD_TERMINATED = 0x02;
+const PROXY_CMD_RESETTED = 0x03; // terminated due to resetting
+const PROXY_CMD_TIMEDOUT = 0x04; // command just timed out.
+
+const error_p = (err) => {
+  if (!err)
+    return false;
+  if (typeof err === 'object')
+    return !!err.error;
+  return true;
+};
+
+const make_error = (tag, err) => {
+  if (tag === PROXY_NO_ERROR)
+    return err;
+  if (typeof err === 'string')
+    err = { msg: err };
+  if (typeof err !== 'object')
+    err = { msg: 'unknown error', original_error: err };
+  err.error = true;
+  if (!err.error_code)
+    err.error_code = ((DEVICE_PROXY_ERROR << 8) | tag) & 0xffff;
+  return err;
+};
+
+const error = (tag, err, cb) => {
+  return cb(make_error(tag, err));
+};
+
 function Server(opts)
 {
   let listener = opts.listener;
@@ -12,7 +45,7 @@ function Server(opts)
   this.device = device;
   device.start_scan(err => {
     device.stop_scan();
-    if (err) {
+    if (error_p(err)) {
       debug('device.start_scan failed', err);
       return;
     }
@@ -25,7 +58,7 @@ function Server(opts)
     list: (reply, arg) => {
       let list = device.list();
       debug(`device-request: ${arg.request}`, list);
-      reply(list, null);
+      return error(PROXY_NO_ERROR, null, (err) => reply(list, err));
     },
     /*
      * Start device scan.  No argument.
@@ -33,7 +66,7 @@ function Server(opts)
     device_scan: (reply, arg) => {
       device.start_scan(err => {
         device.stop_scan();
-        if (err)
+        if (error_p(err))
           debug('device.start_scan failed', err);
         else
           debug('device.start_scan ok');
@@ -46,7 +79,7 @@ function Server(opts)
      */
     open: (reply, arg) => {
       //debug(`device-request: ${arg.request}`, arg.arg.device);
-      device.open(arg.arg.device, err => { reply(null, err); });
+      device.open(arg.arg.device, err => reply(null, err));
     },
     /*
      * Close currently opened device.  Nop if nothing is opened.  No
@@ -54,7 +87,7 @@ function Server(opts)
      */
     close: (reply, arg) => {
       debug(`device-request: ${arg.request}`);
-      device.close(err => { reply(null, err); });
+      device.close(err => reply(null, err));
     },
     /*
      * Reset currently selected device and put it into bootloader
@@ -62,7 +95,7 @@ function Server(opts)
      */
     reset_koov: (reply, arg) => {
       debug(`device-request: ${arg.request}`);
-      device.reset_koov(err => { reply(null, err); });
+      device.reset_koov(err => reply(null, err));
     },
     /*
      * Set specified device.  The argument is one of element returned
@@ -70,14 +103,14 @@ function Server(opts)
      */
     find_device: (reply, arg) => {
       debug(`device-request: ${arg.request}`, arg.arg.device);
-      device.find_device(arg.arg.device, err => { reply(null, err); });
+      device.find_device(arg.arg.device, err => reply(null, err));
     },
     /*
      * Open selected device by `find_device' command above.
      */
     serial_open: (reply, arg) => {
       debug(`device-request: ${arg.request}`, arg);
-      device.serial_open(err => { reply(null, err); });
+      device.serial_open(err => reply(null, err));
     },
     /*
      * Write data to currently opened device.  The argument is data to
@@ -108,10 +141,10 @@ function Server(opts)
   };
   listener('device-request', (sender, arg) => {
     //debug('listener: device-request', arg);
-    const reply = (response, error) => {
+    const reply = (response, err) => {
       //debug('listener: device-request: reply', arg, response);
       sender('device-reply', {
-        request: arg.request, arg: response, error: error, id: arg.id
+        request: arg.request, arg: response, error: err, id: arg.id
       });
     };
     const notify = (notification) => {
@@ -125,7 +158,9 @@ function Server(opts)
     if (handler)
       handler(reply, arg, notify);
     else
-      reply(null, `no such request ${arg.request}`);
+      return error(PROXY_UNKNOWN_REQUEST, {
+        msg: `no such request ${arg.request}`
+      }, err => reply(null, err));
   });
 }
 
@@ -134,6 +169,7 @@ function Client(opts)
   let sender = opts.sender;
   let listener = opts.listener;
   let command_timeout = 20000;
+  const client_version = { major: 1, minor: 0, patch: 2 };
   if (opts.debug)
     debug = opts.debug;
   if (opts.command_timeout)
@@ -147,13 +183,13 @@ function Client(opts)
   this.notifier = {};
   this.serial_events = {};
 
-  const flush_cmdq = () => {
+  const flush_cmdq = (tag) => {
     while (true) {
       const cmd = this.cmdq.pop();
       if (!cmd)
         return;
       //debug('flusing cmd:', cmd);
-      cmd.callback({msg: 'command terminated'});
+      error(tag, 'command terminated', cmd.callback);
     }
   };
 
@@ -161,7 +197,7 @@ function Client(opts)
     this.cmdq = this.cmdq.filter(x => { return x.id !== id; });
   };
 
-  const drop_cmd = (cmd, send_next, reason) => {
+  const drop_cmd = (tag, cmd, send_next, reason) => {
     this.timeout_id = null;
     if (!this.current_cmd) {
       debug('drop_cmd: no current command');
@@ -176,11 +212,11 @@ function Client(opts)
     //debug('drop_cmd: drop command', cmd);
     if (send_next)
       setImmediate(send_cmd);
-    return cmd.callback({ msg: reason });
+    return error(tag, { msg: reason }, cmd.callback);
   };
 
   const drop_expired = (cmd) => {
-    return drop_cmd(cmd, true, 'command timeout');
+    return drop_cmd(PROXY_CMD_TIMEDOUT, cmd, true, 'command timeout');
   };
 
   const send_cmd = () => {
@@ -195,7 +231,9 @@ function Client(opts)
       debug('send_cmd: drop due to out of date', cmd);
       this.cmdq.pop();
       setImmediate(send_cmd);
-      return cmd.callback({ msg: 'command timeout' });
+      return error(PROXY_CMD_TIMEDOUT, {
+        msg: 'command timeout'
+      }, cmd.callback);
     }
     this.current_cmd = cmd;
     this.timeout_id = setTimeout(() => {
@@ -203,7 +241,7 @@ function Client(opts)
     }, command_timeout);
     //debug('send_cmd: dequeue', cmd);
     return sender('device-request', {
-      request: cmd.request, arg: cmd.arg, id: cmd.id
+      version: client_version, request: cmd.request, arg: cmd.arg, id: cmd.id
     });
   };
   this.send_cmd = (cmd) => {
@@ -233,7 +271,20 @@ function Client(opts)
         this.timeout_id = null;
       }
       setImmediate(send_cmd);
-      return cmd.callback(arg.error || arg.arg);
+      const decode_arg = () => {
+        if (arg.error) {
+          if (typeof arg.error === 'object') {
+            if (!arg.error.error)
+              arg.error.error = true;
+            return arg.error;
+          }
+          if (typeof arg.error === 'string')
+            return { error: true, msg: arg.error };
+          return { error: true, msg: 'Unknown error', arg: arg };
+        }
+        return arg.arg;
+      };
+      return cmd.callback(decode_arg());
     } else {
       debug('device_proxy: reply: no cmd found', arg, this.cmdq);
     }
@@ -246,12 +297,12 @@ function Client(opts)
   });
 
   this.reset = (cb) => {
-    flush_cmdq();
+    flush_cmdq(PROXY_CMD_RESETTED);
     this.current_cmd = null;
     this.notifier = {};
     this.serial_events = {};
     this.terminated = false;
-    return cb(null);
+    return error(PROXY_NO_ERROR, null, cb);
   };
   this.list = (cb) => {
     this.request('list', {}, cb);
@@ -268,9 +319,10 @@ function Client(opts)
   this.terminate = (cb) => {
     debug('device_proxy: terminate', this.current_cmd);
     if (this.current_cmd)
-      drop_cmd(this.current_cmd, false, 'command terminated');
-    flush_cmdq();
-    cb(null);
+      drop_cmd(PROXY_CMD_TERMINATED, this.current_cmd, false,
+               'command terminated');
+    flush_cmdq(PROXY_CMD_TERMINATED);
+    return error(PROXY_NO_ERROR, null, cb);
   };
   this.reset_koov = (cb) => {
     this.request('reset_koov', {}, cb);
