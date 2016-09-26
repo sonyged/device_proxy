@@ -23,11 +23,13 @@ const error_p = (err) => {
 const make_error = (tag, err) => {
   if (tag === PROXY_NO_ERROR)
     return err;
+  const original_err = err;
   if (typeof err === 'string')
     err = { msg: err };
-  if (typeof err !== 'object')
-    err = { msg: 'unknown error', original_error: err };
+  if (typeof err !== 'object' || err === null)
+    err = { msg: 'unknown error' };
   err.error = true;
+  err.original_error = JSON.stringify(original_err);
   if (!err.error_code)
     err.error_code = ((DEVICE_PROXY_ERROR << 8) | tag) & 0xffff;
   return err;
@@ -274,7 +276,7 @@ function Client(opts)
       const decode_arg = () => {
         if (arg.error) {
           if (typeof arg.error === 'object') {
-            if (!arg.error.error)
+            if (!arg.error.hasOwnProperty('error'))
               arg.error.error = true;
             return arg.error;
           }
