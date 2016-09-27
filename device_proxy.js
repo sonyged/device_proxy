@@ -63,6 +63,20 @@ function Server(opts)
       return error(PROXY_NO_ERROR, null, (err) => reply(list, err));
     },
     /*
+     * Return information about the platform running on.
+     * The information is object of following form:
+     *   {
+     *     platform: ['darwin'|'win32']
+     *   }
+     */
+    platform: (reply, arg) => {
+      let platform = process.platform;
+      debug(`device-request: ${arg.request}`, platform);
+      return error(PROXY_NO_ERROR, null, (err) => reply({
+        platform: platform
+      }, err));
+    },
+    /*
      * Start device scan.  No argument.
      */
     device_scan: (reply, arg) => {
@@ -308,6 +322,9 @@ function Client(opts)
   };
   this.list = (cb) => {
     this.request('list', {}, cb);
+  };
+  this.platform = (cb) => {
+    this.request('platform', {}, cb);
   };
   this.device_scan = (cb) => {
     this.request('device_scan', {}, cb);
