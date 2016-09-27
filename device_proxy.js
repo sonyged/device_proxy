@@ -66,14 +66,18 @@ function Server(opts)
      * Return information about the platform running on.
      * The information is object of following form:
      *   {
-     *     platform: ['darwin'|'win32']
+     *     platform: ['darwin'|'win32'|'ios'|'android'],
+     *     version: 'version string'
      *   }
      */
     platform: (reply, arg) => {
-      let platform = process.platform;
-      debug(`device-request: ${arg.request}`, platform);
+      const os = require('os');
+      const platform = process.platform;
+      const version = os.release();
+      debug(`device-request: ${arg.request}`, platform, version);
       return error(PROXY_NO_ERROR, null, (err) => reply({
-        platform: platform
+        platform: platform,
+        version: version
       }, err));
     },
     /*
