@@ -137,8 +137,13 @@ function Server(opts)
       });
     }
   };
-  listener('device-request', (sender, arg) => {
+  listener('device-request', (sender_, arg) => {
     //debug('listener: device-request', arg);
+    const sender = (tag, arg) => {
+      // As we are running on browser processs, there is nothing to do
+      // except to trap exceptions...
+      try { sender_(tag, arg); } catch (e) { debug('sender: exception', e); }
+    };
     const reply = (response, err) => {
       //debug('listener: device-request: reply', arg, response);
       sender('device-reply', {
