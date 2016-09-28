@@ -3,6 +3,7 @@
 
 'use strict';
 let debug = require('debug')('device_proxy');
+const koovdev_error = require('koovdev_error');
 
 const DEVICE_PROXY_ERROR = 0xfd;
 
@@ -12,32 +13,9 @@ const PROXY_CMD_TERMINATED = 0x02;
 const PROXY_CMD_RESETTED = 0x03; // terminated due to resetting
 const PROXY_CMD_TIMEDOUT = 0x04; // command just timed out.
 
-const error_p = (err) => {
-  if (!err)
-    return false;
-  if (typeof err === 'object')
-    return !!err.error;
-  return true;
-};
-
-const make_error = (tag, err) => {
-  if (tag === PROXY_NO_ERROR)
-    return err;
-  const original_err = err;
-  if (typeof err === 'string')
-    err = { msg: err };
-  if (typeof err !== 'object' || err === null)
-    err = { msg: 'unknown error' };
-  err.error = true;
-  err.original_error = JSON.stringify(original_err);
-  if (!err.error_code)
-    err.error_code = ((DEVICE_PROXY_ERROR << 8) | tag) & 0xffff;
-  return err;
-};
-
-const error = (tag, err, cb) => {
-  return cb(make_error(tag, err));
-};
+const { error, error_p, make_error } = koovdev_error(DEVICE_PROXY_ERROR, [
+  PROXY_NO_ERROR
+]);
 
 function Server(opts)
 {
