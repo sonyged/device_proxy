@@ -264,7 +264,7 @@ function Client(opts)
     this.send_cmd(cmd);
   };
   listener('device-reply', (arg) => {
-    //debug('device_proxy: reply', arg);
+    debug('device_proxy: reply', arg);
     let cmd = this.cmdq.find(x => { return x.id === arg.id; });
     if (cmd) {
       dequeue_cmd(arg.id);
@@ -293,7 +293,7 @@ function Client(opts)
     }
   });
   listener('device-notify', (arg) => {
-    //debug('device_notify:', arg);
+    debug('device_notify:', arg);
     const notifier = this.notifier[arg.request];
     if (notifier)
       notifier(arg.arg);
