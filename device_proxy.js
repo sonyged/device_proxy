@@ -135,6 +135,13 @@ function Server(opts)
           data: notification
         });
       });
+    },
+    /*
+     * This method seems to be iOS / Android. Since it is not used in Electron,
+     *  we return the process without doing anything.
+     */
+    set_deivce_options: (reply, arg, notify) => {
+      reply(null, null);
     }
   };
   listener('device-request', (sender_, arg) => {
@@ -371,6 +378,9 @@ function Client(opts)
       },
     };
     return serial;
+  };
+  this.set_device_options = (opts, cb) => {
+    this.request('set_device_options', { opts: opts }, cb);    
   };
 }
 
