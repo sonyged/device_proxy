@@ -379,8 +379,8 @@ function Client(opts)
     };
     return serial;
   };
-  this.set_deivce_options = (opts, cb) => {
-    this.request('set_deivce_options', { opts: opts }, cb);    
+  this.set_device_options = (opts, cb) => {
+    this.request('set_device_options', { opts: opts }, cb);    
   };
 }
 
