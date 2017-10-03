@@ -195,7 +195,7 @@ function Client(opts)
 
   const flush_cmdq = (tag) => {
     while (true) {
-      const cmd = this.cmdq.pop();
+      const cmd = this.cmdq.shift();
       if (!cmd)
         return;
       //debug('flusing cmd:', cmd);
@@ -239,7 +239,7 @@ function Client(opts)
     const now = Date.now();
     if (now > cmd.timestamp + command_timeout) {
       debug('send_cmd: drop due to out of date', cmd);
-      this.cmdq.pop();
+      this.cmdq.shift();
       setImmediate(send_cmd);
       return error(PROXY_CMD_TIMEDOUT, {
         msg: 'command timeout'
