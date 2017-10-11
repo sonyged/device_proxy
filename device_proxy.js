@@ -69,7 +69,7 @@ function Server(opts)
         else
           debug('device.start_scan ok');
         return reply(null, err);
-      });
+      }, arg.arg);
     },
     /*
      * Open specified device.  The argument is one of elements
@@ -320,8 +320,8 @@ function Client(opts)
   this.platform = (cb) => {
     this.request('platform', {}, cb);
   };
-  this.device_scan = (cb) => {
-    this.request('device_scan', {}, cb);
+  this.device_scan = (cb, arg) => {
+    this.request('device_scan', arg || {}, cb);
   };
   this.open = (device, cb) => {
     this.request('open', { device: device }, cb);
