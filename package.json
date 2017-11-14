@@ -8,7 +8,7 @@
     "posttest": "./node_modules/.bin/istanbul check-coverage && rm -rf coverage"
   },
   "author": "Sony Global Education, Inc.",
-  "license": "SEE LICENSE in ./LICENSE"
+  "license": "SEE LICENSE in ./LICENSE",
   "dependencies": {
     "debug": "^2.6.6",
     "koovdev_error": "git+ssh://git@github.com/sonyged/koovdev_error.git"
