@@ -1,6 +1,6 @@
 {
   "name": "device_proxy",
-  "version": "1.0.99",
+  "version": "1.0.100",
   "description": "device module proxy between renderer and browser processes",
   "main": "device_proxy.js",
   "scripts": {
@@ -11,7 +11,7 @@
   "license": "SEE LICENSE in ./LICENSE",
   "dependencies": {
     "debug": "^2.6.6",
-    "koovdev_error": "git+ssh://git@github.com/sonyged/koovdev_error.git"
+    "koovdev_error": "https://github.com/sonyged/koovdev_error.git"
   },
   "devDependencies": {
     "nodeunit": "^0.11.0",
