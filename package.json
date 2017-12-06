@@ -1,17 +1,17 @@
 {
   "name": "device_proxy",
-  "version": "1.0.98",
+  "version": "1.0.100",
   "description": "device module proxy between renderer and browser processes",
   "main": "device_proxy.js",
   "scripts": {
     "test": "./node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha -- --recursive -R spec -r should",
     "posttest": "./node_modules/.bin/istanbul check-coverage && rm -rf coverage"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Sony Global Education, Inc.",
+  "license": "SEE LICENSE in ./LICENSE",
   "dependencies": {
     "debug": "^2.6.6",
-    "koovdev_error": "git+ssh://git@bitbucket.org/sonyged/koovdev_error.git"
+    "koovdev_error": "https://github.com/sonyged/koovdev_error.git"
   },
   "devDependencies": {
     "nodeunit": "^0.11.0",
