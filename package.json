@@ -1,6 +1,6 @@
 {
   "name": "device_proxy",
-  "version": "1.0.101",
+  "version": "1.0.102",
   "description": "device module proxy between renderer and browser processes",
   "main": "device_proxy.js",
   "scripts": {
