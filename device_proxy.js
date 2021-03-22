@@ -410,6 +410,42 @@ function Client(opts)
   this.set_device_options = (opts, cb) => {
     this.request('set_device_options', { opts: opts }, cb);    
   };
+  // Utility function for win32/mac workaround.
+  this.rescan_and_open = (oerr, device, cb) => {
+    if (device.type !== 'ble')
+      return cb(oerr, device);
+    this.platform(({ platform }) => {
+      debug('rescan_and_open: platform', platform);
+      if (platform !== 'win32' && platform !== 'darwin')
+        return cb(oerr, device);
+      this.close(err => {
+        debug('rescan_and_open: close', err);
+        if (error_p(err))
+          return cb(err, device);
+        debug('rescan_and_open: start rescan');
+        this.device_scan((err) => {
+          debug('rescan_and_open: rescan', err);
+          if (error_p(err))
+            return cb(err, device);
+          this.list((devices) => {
+            debug('rescan_and_open: list', devices);
+            const newdev = devices.find(
+              x => x.type === 'ble' && x.uuid === device.uuid);
+            debug('rescan_and_open: list found', newdev);
+            if (! newdev)
+              return cb(oerr, undefined);
+            this.find_device(newdev, (err) => {
+              debug('rescan_and_open: find', err);
+              this.serial_open((err) => {
+                debug('rescan_and_open: reopen', err);
+                return cb(err, newdev);
+              });
+            });
+          });
+        }, {});
+      });
+    });
+  };
 }
 
 module.exports = {
