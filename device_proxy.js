@@ -417,7 +417,7 @@ function Client(opts)
     this.platform(({ platform }) => {
       debug('rescan: platform', platform);
       if (! platforms.includes(platform)) {
-        debug('rescan: skip');
+        debug('rescan: skip', platforms, `"${platform}"`);
         return cb(oerr, device);
       }
       debug('rescan: start rescan');
